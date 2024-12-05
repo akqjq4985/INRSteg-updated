@@ -7,18 +7,56 @@ import torch
 import dataio
 import os
 import diff_operators
-from torchvision.utils import make_grid, save_image
+from torchvision.utils import make_grid
 import skimage.measure
 import cv2
 import meta_modules
 import scipy.io.wavfile as wavfile
 import cmapy
+import yaml
+import glob
+from types import SimpleNamespace
 
+def categorize_data(file_path):
+    type_mapping = {
+        "png": "image",
+        "jpg": "image",
+        "jpeg": "image",
+        "bmp": "image",
+        "wav": "audio",
+        "mp3": "audio",
+        "flac": "audio",
+        "npy": "video",
+        "mp4": "video",
+        "avi": "video",
+        "xyz": "sdf",
+        "obj": "sdf",
+    }
+    if file_path.split('.')[-1].lower() in type_mapping:
+        return type_mapping[file_path.split('.')[-1].lower()]
+
+def get_files_in_folder(folder_path):
+    files = []
+    for file_path in glob.glob(os.path.join(folder_path, "*")):
+        if os.path.isfile(file_path):
+            files.append({"type": categorize_data(file_path), "path": file_path})
+    return files
+
+def load_config(config_path):
+    with open(config_path, "r") as file:
+        config = yaml.safe_load(file)
+    def dict_to_namespace(d):
+        if isinstance(d, dict):
+            return SimpleNamespace(**{key: dict_to_namespace(value) for key, value in d.items()})
+        return d
+    return dict_to_namespace(config)
+
+def get_type_config(config, type):
+    return config["types"].get(type, {})
 
 def cond_mkdir(path):
     if not os.path.exists(path):
         os.makedirs(path)
-
 
 def write_result_img(experiment_name, filename, img):
     root_path = '/media/data1/sitzmann/generalization/results'
@@ -26,7 +64,6 @@ def write_result_img(experiment_name, filename, img):
 
     img = img.detach().cpu().numpy()
     np.save(os.path.join(trgt_dir, filename), img)
-
 
 def densely_sample_activations(model, num_dim=1, num_steps=int(1e6)):
     input = torch.linspace(-1., 1., steps=num_steps).float()

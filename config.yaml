@@ -1,0 +1,34 @@
+experiment_name: "test"
+logging_root: "./logs"
+model_type: "sine"
+image:
+  hidden_features: 256
+  num_hidden_layers: 6
+  num_epochs: 100000
+  epochs_til_print: 10000
+  resolution: 256
+  batch_size: 1
+  lr: 1e-4
+audio:
+  hidden_features: 256
+  num_hidden_layers: 6
+  num_epochs: 100000
+  epochs_til_print: 10000
+  batch_size: 1
+  lr: 1e-4
+video:
+  dataset: "bunny"
+  hidden_features: 256
+  num_hidden_layers: 6
+  num_epochs: 100000
+  epochs_til_print: 10000
+  sample_frac: 38e-2
+  batch_size: 1
+  lr: 1e-4
+sdf:
+  hidden_features: 256
+  num_hidden_layers: 6
+  num_epochs: 15000
+  epochs_til_print: 1000
+  batch_size: 5000
+  lr: 1e-4
