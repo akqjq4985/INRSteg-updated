@@ -468,7 +468,7 @@ class Video(Dataset):
         if 'npy' in path_to_video:
             self.vid = np.load(path_to_video)
         elif 'mp4' in path_to_video:
-            self.vid = skvideo.io.vread(path_to_video).astype(np.single) / 255.
+            self.vid = skvideo.io.vread(path_to_video).astype(np.float32) / 255.
         selected_frames_indices = np.linspace(0, len(self.vid) - 1, num=200, dtype=int)
         self.selected_frames = [self.vid[i] for i in selected_frames_indices]
         for i in range(len(self.selected_frames)):
@@ -873,7 +873,7 @@ class Implicit3DWrapper(torch.utils.data.Dataset):
         self.mgrid = get_mgrid(sidelength, dim=3)
         data = (torch.from_numpy(self.dataset[0]) - 0.5) / 0.5
         self.data = data.view(-1, self.dataset.channels)
-        self.sample_fraction = sample_fraction
+        self.sample_fraction = float(sample_fraction)
         self.N_samples = int(self.sample_fraction * self.mgrid.shape[0])
 
     def __len__(self):
