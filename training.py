@@ -11,7 +11,7 @@ import os
 import pdb
 
 def train_image(data_path, inr_size, config, mask=None, model=None):
-    data_name = "image" + os.path.splitext(data_path.split('/')[-1])[0]
+    data_name = "image_" + os.path.splitext(data_path.split('/')[-1])[0]
     img_dataset = dataio.ImageFile(data_path)
     coord_dataset = dataio.Implicit2DWrapper(img_dataset, sidelength=config.image.resolution)
     image_resolution = (config.image.resolution, config.image.resolution)
@@ -27,6 +27,7 @@ def train_image(data_path, inr_size, config, mask=None, model=None):
             model = modules.SingleBVPNet(type='relu', mode=config.model_type, sidelength=image_resolution)
         else:
             raise NotImplementedError
+    model.net.net[inr_size["num_hidden_layers"]+1][0].bias = torch.nn.Parameter(torch.zeros(3))
     model.cuda()
     root_path = os.path.join(config.logging_root, config.experiment_name)
     loss_fn = partial(loss_functions.image_mse, None)
@@ -58,6 +59,7 @@ def train_audio(data_path, inr_size, config, mask=None, model=None):
             model = modules.SingleBVPNet(type='relu', mode=config.model_type, fn_samples=len(audio_dataset.data), in_features=1)
         else:
             raise NotImplementedError
+    model.net.net[inr_size["num_hidden_layers"]+1][0].bias = torch.nn.Parameter(torch.zeros(1))
     model.cuda()
     root_path = os.path.join(config.logging_root, config.experiment_name)
     loss_fn = loss_functions.function_mse
@@ -90,6 +92,7 @@ def train_video(data_path, inr_size, config, mask=None, model=None):
             model = modules.SingleBVPNet(type='relu', in_features=3, out_features=vid_dataset.channels, mode=config.model_type)
         else:
             raise NotImplementedError
+    model.net.net[inr_size["num_hidden_layers"]+1][0].bias = torch.nn.Parameter(torch.zeros(vid_dataset.channels))
     model.cuda()
     root_path = os.path.join(config.logging_root, config.experiment_name)
     loss_fn = partial(loss_functions.image_mse, None)
@@ -111,7 +114,6 @@ def train_sdf(data_path, inr_size, config, mask=None, model=None):
     data_name = "sdf_" + os.path.splitext(data_path.split('/')[-1])[0]
     sdf_dataset = dataio.PointCloud(data_path, on_surface_points=config.sdf.batch_size)
     dataloader = DataLoader(sdf_dataset, shuffle=True, batch_size=1, pin_memory=True, num_workers=0)
-    
     if model is None:
         if config.model_type == 'nerf':
             model = modules.SingleBVPNet(type='relu', mode='nerf', in_features=3, hidden_features=inr_size["hidden_features"], 
@@ -119,6 +121,7 @@ def train_sdf(data_path, inr_size, config, mask=None, model=None):
         else:
             model = modules.SingleBVPNet(type=config.model_type, in_features=3, hidden_features=inr_size["hidden_features"], 
                                         num_hidden_layers=inr_size["num_hidden_layers"])
+    model.net.net[inr_size["num_hidden_layers"]+1][0].bias = torch.nn.Parameter(torch.zeros(1))
     model.cuda()
     root_path = os.path.join(config.logging_root, config.experiment_name)
     loss_fn = loss_functions.sdf
@@ -171,7 +174,6 @@ def train_inr(model, train_dataloader, epochs, lr, epochs_til_print,
                         train_loss.backward()
                         return train_loss
                     optim.step(closure)
-
                 model_output = model(model_input)
                 losses = loss_fn(model_output, gt)
 
@@ -191,6 +193,7 @@ def train_inr(model, train_dataloader, epochs, lr, epochs_til_print,
                             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.)
                         else:
                             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_grad)
+                    model.net.net[len(model.net.net)-1][0].bias.grad *= 0
                     optim.step()
 
                 pbar.update(1)

@@ -1,7 +1,7 @@
 import os
 from utils import load_config, get_type_config, get_files_in_folder
 from training import train_image, train_audio, train_video, train_sdf
-from steganography import assign_secret_inr_size, hide, reveal, reconstruct
+from steganography import assign_secret_inr_size, hide, reveal, check_unchanged_secret_data, reconstruct
 import pdb
 
 if __name__ == "__main__":
@@ -37,10 +37,16 @@ if __name__ == "__main__":
         secret_inrs.append(inr)
 
     # Insert secret data and train cover INR
-    cover_inr, mask_per_data = hide(secret_inrs, secret_data_list, cover_data_list, cover_inr_size, config)
+    if config.encode:
+        private_key = 42
+        cover_inr, mask_per_data = hide(secret_inrs, secret_data_list, cover_data_list, cover_inr_size, config, key=private_key)
+    else:
+        cover_inr, mask_per_data = hide(secret_inrs, secret_data_list, cover_data_list, cover_inr_size, config)
     
     # Evaluate secret and cover
         # Extract secret inrs
     secret_inrs = reveal(cover_inr, mask_per_data, secret_data_list, config)
+        # Check secret inrs do not change
+    check_unchanged_secret_data(secret_inrs, secret_data_list, config, encode=config.encode)
         # Reconstruct secret data
     reconstruct(secret_inrs, secret_data_list, config)

@@ -21,6 +21,7 @@ python main.py
 ```
 
 ## Update Plan
+- [X] Hide and reveal secret data
 - [ ] Evaluation on reconstructed results
 - [ ] Steganalysis analysis
 - [ ] Permutation application

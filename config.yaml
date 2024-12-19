@@ -1,6 +1,7 @@
 experiment_name: "test"
 logging_root: "./logs"
 model_type: "sine"
+encode: True
 plot: True
 
 image:

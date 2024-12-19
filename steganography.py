@@ -1,9 +1,12 @@
 from training import train_image, train_audio, train_video, train_sdf
+from torch.utils.data import DataLoader
 from eval_utils import recon_image, recon_audio, recon_video, recon_sdf
 import modules
+import dataio
 import torch
 import copy
 import pdb
+import os
 
 type_dict = {'image': (2,3), 'audio': (1,1), 'sdf': (3,1), 'video': (3,3)}
 
@@ -29,97 +32,6 @@ def assign_secret_inr_size(secret_data_list, cover_data_list, cover_inr_size):
         secret_data["inr_size"] = secret_inr_size
     return secret_data_list
 
-# def pad_inr(secret_inr, cover_data, cover_inr_size, config): ##size1 is the number of hidden features for the hidden data, size2 is the padded size/2
-#     hidden_features = cover_inr_size["hidden_features"]
-#     num_hidden_layers = cover_inr_size["num_hidden_layers"]
-#     secret_inr_hidden_features = secret_inr["net.net.0.0.weight"].shape[0]
-#     secret_inr_num_hidden_layers = (len(secret_inr) // 2) - 2
-#     pad = (hidden_features - secret_inr_hidden_features) // 2
-#     mask = {}
-    
-#     input_dim, output_dim = type_dict[cover_data["type"]]
-#     secret_input_dim = secret_inr["net.net.0.0.weight"].shape[1]
-#     secret_output_dim = secret_inr[f"net.net.{secret_inr_num_hidden_layers+1}.0.weight"].shape[0]
-#     for i in range(num_hidden_layers+2):
-#         layer_name = f"net.net.{i}.0.weight"
-#         org_weight = inr.net.net[i][0].weight.data
-#         mask[layer_name] = torch.ones_like(org_weight)
-#         if i == 0:
-#             if input_dim < secret_input_dim:
-#                 continue
-#         if input_dim < secret_input_dim:
-#             secret_weight = secret_inr[f"net.net.{i-1}.0.weight"]
-#         else:
-#             secret_weight = secret_inr[f"net.net.{i}.0.weight"]
-#         if i == 0:
-#             org_weight[pad:-pad, :secret_input_dim] = 0
-#             mask[layer_name][pad:-pad, :secret_input_dim] = 0
-#             m = torch.nn.ZeroPad2d((0,(input_dim-secret_input_dim),pad,pad))
-#         elif i == 1:
-#             if input_dim < secret_input_dim:
-#                 org_weight[pad:-pad, :secret_input_dim] = 0
-#                 mask[layer_name][pad:-pad, :secret_input_dim] = 0
-#                 m = torch.nn.ZeroPad2d((0,(hidden_features-secret_input_dim),pad,pad))
-#             else:
-#                 org_weight[pad:-pad, pad:-pad] = 0
-#                 mask[layer_name][pad:-pad, pad:-pad] = 0
-#                 m = torch.nn.ZeroPad2d((pad,pad,pad,pad))
-#         elif i == num_hidden_layers:
-#             if output_dim < secret_output_dim:
-#                 org_weight[:secret_output_dim, pad:-pad] = 0
-#                 mask[layer_name][:secret_output_dim, pad:-pad] = 0
-#                 m = torch.nn.ZeroPad2d((pad,pad,0,(output_dim-secret_output_dim)))
-#             else:
-#                 org_weight[pad:-pad, pad:-pad] = 0
-#                 mask[layer_name][pad:-pad, pad:-pad] = 0
-#                 m = torch.nn.ZeroPad2d((pad,pad,pad,pad))
-#         elif i == (num_hidden_layers+1):
-#             if output_dim < secret_output_dim:
-#                 continue
-#             else:
-#                 org_weight[:secret_output_dim, pad:-pad] = 0
-#                 mask[layer_name][:secret_output_dim, pad:-pad] = 0
-#                 m = torch.nn.ZeroPad2d((pad,pad,0,(output_dim-secret_output_dim)))
-#         else:
-#             org_weight[pad:-pad, pad:-pad] = 0
-#             mask[layer_name][pad:-pad, pad:-pad] = 0
-#             m = torch.nn.ZeroPad2d((pad,pad,pad,pad))
-#         secret_weight = m(secret_weight)
-#         new_weight = org_weight.cuda() + secret_weight.cuda()
-#         inr.net.net[i][0].weight.data = new_weight
-        
-#         layer_name = f"net.net.{i}.0.bias"
-#         org_bias = inr.net.net[i][0].bias.data
-#         mask[layer_name] = torch.ones_like(org_bias)
-#         if input_dim < secret_input_dim:
-#             secret_bias = secret_inr[f"net.net.{i-1}.0.bias"]
-#         else:
-#             secret_bias = secret_inr[f"net.net.{i}.0.bias"]
-#         if output_dim < secret_output_dim:
-#             if i != (num_hidden_layers):
-#                 org_bias[pad:-pad] = 0
-#                 mask[layer_name][pad:-pad] = 0
-#                 m = torch.nn.ConstantPad1d((pad,pad),0)
-#             elif i == (num_hidden_layers+1):
-#                 continue
-#             else:
-#                 m = torch.nn.ConstantPad1d((0,(output_dim-secret_output_dim)), 0.0)
-#                 org_bias[:secret_output_dim] = 0
-#                 mask[layer_name][:secret_output_dim] = 0
-#         else:
-#             if i != (num_hidden_layers+1):
-#                 org_bias[pad:-pad] = 0
-#                 mask[layer_name][pad:-pad] = 0
-#                 m = torch.nn.ConstantPad1d((pad,pad),0)
-#             else:
-#                 m = torch.nn.ConstantPad1d((0,(output_dim-secret_output_dim)), 0.0)
-#                 org_bias[:secret_output_dim] = 0
-#                 mask[layer_name][:secret_output_dim] = 0
-#         secret_bias = m(secret_bias)
-#         new_bias = org_bias.cuda() + secret_bias.cuda()    
-#         inr.net.net[i][0].bias.data = new_bias
-#     return inr, mask
-
 def insert_single_inr(secret_inr, cover_inr, pad):
     secret_inr_hidden_features = secret_inr["net.net.0.0.weight"].shape[0]
     secret_inr_num_hidden_layers = (len(secret_inr) // 2) - 2
@@ -133,12 +45,12 @@ def insert_single_inr(secret_inr, cover_inr, pad):
     for i in range(num_hidden_layers+2):
         layer_name = f"net.net.{i}.0.weight"
         org_weight = cover_inr.net.net[i][0].weight.data
-        mask[layer_name] = torch.ones_like(org_weight)
+        mask[layer_name] = torch.ones_like(org_weight).cuda()
         if i == 0:
             if input_dim < secret_input_dim:
                 layer_name = f"net.net.{i}.0.bias"
                 org_bias = cover_inr.net.net[i][0].bias.data
-                mask[layer_name] = torch.ones_like(org_bias)
+                mask[layer_name] = torch.ones_like(org_bias).cuda()
                 continue
         if input_dim < secret_input_dim:
             secret_weight = secret_inr[f"net.net.{i-1}.0.weight"]
@@ -183,7 +95,7 @@ def insert_single_inr(secret_inr, cover_inr, pad):
         
         layer_name = f"net.net.{i}.0.bias"
         org_bias = cover_inr.net.net[i][0].bias.data
-        mask[layer_name] = torch.ones_like(org_bias)
+        mask[layer_name] = torch.ones_like(org_bias).cuda()
         if input_dim < secret_input_dim:
             secret_bias = secret_inr[f"net.net.{i-1}.0.bias"]
         else:
@@ -253,9 +165,78 @@ def insert_inr(secret_inrs, cover_data, cover_inr_size, config):
             mask_per_data.append(mask)
         return cover_inr, accumulated_mask, mask_per_data
 
-def hide(secret_inrs, secret_data_list, cover_data_list, cover_inr_size, config):
-    cover_inr, mask, mask_per_data = insert_inr(secret_inrs, cover_data_list[0], cover_inr_size, config)
+def permute(cover_inr, mask, mask_per_data, key):
+    torch.manual_seed(key)
+    torch.cuda.manual_seed(key)
+    torch.cuda.manual_seed_all(key)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
+    permute_dict = {}
+    num_hidden_layers = len(cover_inr.net.net) - 2
+    for i in range(1, num_hidden_layers+1):
+        vec = cover_inr.net.net[i][0].weight
+        perm_vec = torch.randperm(vec.shape[0])
+        perm_matrix = torch.eye(vec.shape[0])[perm_vec].T
+        permute_dict[i] = perm_matrix.cuda()
+
+    for name, param in cover_inr.named_parameters():
+        layer_index = int(name.split('.')[2])
+        if layer_index == (num_hidden_layers):
+            break
+        P = permute_dict[layer_index+1]
+        if 'weight' in name:
+            cover_inr.net.net[layer_index][0].weight.data = P.mm(param)
+            cover_inr.net.net[layer_index+1][0].weight.data = cover_inr.net.net[layer_index+1][0].weight.data.mm(P.T)
+            mask[name] = P.mm(mask[name])
+            next_name = f'net.net.{layer_index+1}.0.weight'
+            mask[next_name] = mask[next_name].mm(P.T)
+            for i in range(len(mask_per_data)):
+                mask_per_data[i][name] = P.mm(mask_per_data[i][name])
+                mask_per_data[i][next_name] = mask_per_data[i][next_name].mm(P.T)
+        elif 'bias' in name:
+            cover_inr.net.net[layer_index][0].bias.data = P.matmul(param)
+            mask[name] = P.matmul(mask[name])
+            for i in range(len(mask_per_data)):
+                mask_per_data[i][name] = P.matmul(mask_per_data[i][name])
+    return cover_inr, mask, mask_per_data
+
+def checked_upchanged_permute(cover_inr, cover_data_list, config, mask, mask_per_data, key):
+    data_path = cover_data_list[0]["path"]
+    data_type = cover_data_list[0]["type"]
+    if data_type == 'image':
+        img_dataset = dataio.ImageFile(data_path)
+        coord_dataset = dataio.Implicit2DWrapper(img_dataset, sidelength=config.image.resolution)
+        image_resolution = (config.image.resolution, config.image.resolution)
+        dataloader = DataLoader(coord_dataset, shuffle=True, batch_size=config.image.batch_size, pin_memory=True, num_workers=0)
+    elif data_type == 'audio':
+        audio_dataset = dataio.AudioFile(data_path)
+        coord_dataset = dataio.ImplicitAudioWrapper(audio_dataset)
+        dataloader = DataLoader(coord_dataset, shuffle=True, batch_size=config.audio.batch_size, pin_memory=True, num_workers=0)
+    elif data_type == 'video':
+        vid_dataset = dataio.Video(data_path)
+        coord_dataset = dataio.Implicit3DWrapper(vid_dataset)
+        dataloader = DataLoader(coord_dataset, shuffle=True, batch_size=config.video.batch_size, pin_memory=True, num_workers=0)
+    elif data_type == 'sdf':
+        sdf_dataset = dataio.SDFFile(data_path)
+        coord_dataset = dataio.Implicit3DWrapper(sdf_dataset)
+        dataloader = DataLoader(coord_dataset, shuffle=True, batch_size=config.sdf.batch_size, pin_memory=True, num_workers=0)
+    with torch.no_grad():
+        model_input, gt = next(iter(dataloader))
+        model_input = {key: value.cuda() for key, value in model_input.items()}
+        gt = {key: value.cuda() for key, value in gt.items()}
+        model_output = cover_inr(model_input)
+    cover_inr, mask, mask_per_data = permute(cover_inr, mask, mask_per_data, key)
+    with torch.no_grad():
+        model_output_after_permute = cover_inr(model_input)
+    if not torch.all(model_output['model_out'] == model_output_after_permute['model_out']):
+        ValueError("Model output has changed after permutation")
+
+def hide(secret_inrs, secret_data_list, cover_data_list, cover_inr_size, config, key=None):
+    cover_inr, mask, mask_per_data = insert_inr(secret_inrs, cover_data_list[0], cover_inr_size, config)
+    if key is not None:
+        checked_upchanged_permute(cover_inr, cover_data_list, config, mask, mask_per_data, key)
+        permuted_cover_inr, mask, mask_per_data = permute(cover_inr, mask, mask_per_data, key)
     data_path = cover_data_list[0]["path"]
     inr_size = cover_inr_size
     if cover_data_list[0]["type"] == 'image':
@@ -306,14 +287,99 @@ def reveal(cover_inr, mask_per_data, secret_data_list, config):
                 if reverse_mask[name].sum() == 0:
                     continue
                 if 'weight' in name:
-                    secret_weight = param.cuda() * reverse_mask[name].cuda()
+                    mask_indices_x = (reverse_mask[f'net.net.{layer_index}.0.weight'] != 0).any(dim=1).nonzero(as_tuple=True)[0]
+                    mask_indices_y = (reverse_mask[f'net.net.{layer_index}.0.weight'] != 0).any(dim=0).nonzero(as_tuple=True)[0]
+                    secret_weight = param[mask_indices_x]
+                    secret_weight = secret_weight[:,mask_indices_y]
                     secret_inr.net.net[secret_layer_index][0].weight.data = secret_weight.clone()
                 elif 'bias' in name:
-                    secret_bias = param.cuda() * reverse_mask[name].cuda()
+                    mask_indices = (reverse_mask[f'net.net.{layer_index}.0.bias'] != 0).nonzero(as_tuple=True)[0]
+                    secret_bias = param[mask_indices]
                     secret_inr.net.net[secret_layer_index][0].bias.data = secret_bias.clone()
                     secret_layer_index += 1
         secret_inrs.append(secret_inr)
+        del secret_inr
     return secret_inrs
+
+def check_unchanged_secret_data(secret_inrs, secret_data_list, config, encode=False):
+    log_dir = os.path.join(config.logging_root, config.experiment_name)
+    if encode:
+        for i, secret_data in enumerate(secret_data_list):
+            data_path = secret_data["path"]
+            data_type = secret_data["type"]
+            inr_size = secret_data["inr_size"]
+            if data_type == 'image':
+                data_name = "image_" + os.path.splitext(data_path.split('/')[-1])[0]
+                img_dataset = dataio.ImageFile(data_path)
+                coord_dataset = dataio.Implicit2DWrapper(img_dataset, sidelength=config.image.resolution)
+                image_resolution = (config.image.resolution, config.image.resolution)
+                dataloader = DataLoader(coord_dataset, shuffle=True, batch_size=config.image.batch_size, pin_memory=True, num_workers=0)
+            elif data_type == 'audio':
+                data_name = "audio_" + os.path.splitext(data_path.split('/')[-1])[0]
+                audio_dataset = dataio.AudioFile(data_path)
+                coord_dataset = dataio.ImplicitAudioWrapper(audio_dataset)
+                dataloader = DataLoader(coord_dataset, shuffle=True, batch_size=config.audio.batch_size, pin_memory=True, num_workers=0)
+            elif data_type == 'video':
+                data_name = "video_" + os.path.splitext(data_path.split('/')[-1])[0]
+                vid_dataset = dataio.Video(data_path)
+                coord_dataset = dataio.Implicit3DWrapper(vid_dataset, sidelength=vid_dataset.shape, sample_fraction=config.video.sample_frac)
+                dataloader = DataLoader(coord_dataset, shuffle=True, batch_size=config.video.batch_size, pin_memory=True, num_workers=0)
+            elif data_type == 'sdf':
+                data_name = "sdf_" + os.path.splitext(data_path.split('/')[-1])[0]
+                sdf_dataset = dataio.SDFFile(data_path)
+                coord_dataset = dataio.Implicit3DWrapper(sdf_dataset)
+                dataloader = DataLoader(coord_dataset, shuffle=True, batch_size=config.sdf.batch_size, pin_memory=True, num_workers=0)
+            checkpoint = torch.load(f'{log_dir}/{data_name}.pth')
+            if data_type == 'image':
+                secret_inr_before_encoding = modules.SingleBVPNet(type=config.model_type, mode='mlp', 
+                                            sidelength=image_resolution, out_features=3, hidden_features=inr_size["hidden_features"], 
+                                            num_hidden_layers=inr_size["num_hidden_layers"])
+            elif data_type == 'audio':
+                secret_inr_before_encoding = modules.SingleBVPNet(type=config.model_type, mode='mlp', in_features=1, 
+                                            hidden_features=inr_size["hidden_features"], num_hidden_layers=inr_size["num_hidden_layers"])
+            elif data_type == 'video':
+                secret_inr_before_encoding = modules.SingleBVPNet(type=config.model_type, mode='mlp', in_features=3, 
+                                            out_features=3, hidden_features=inr_size["hidden_features"], num_hidden_layers=inr_size["num_hidden_layers"])
+            elif data_type == 'sdf':
+                secret_inr_before_encoding = modules.SingleBVPNet(type=config.model_type, mode='mlp', in_features=3, 
+                                            hidden_features=inr_size["hidden_features"], num_hidden_layers=inr_size["num_hidden_layers"])
+            secret_inr_before_encoding.load_state_dict(checkpoint)
+            secret_inr_before_encoding = secret_inr_before_encoding.cuda()
+            with torch.no_grad():
+                model_input, gt = next(iter(dataloader))
+                model_input = {key: value.cuda() for key, value in model_input.items()}
+                gt = {key: value.cuda() for key, value in gt.items()}
+                model_output = secret_inr_before_encoding(model_input)
+            secret_inr_after_encoding = secret_inrs[i]
+            with torch.no_grad():
+                model_output_after_encoding = secret_inr_after_encoding(model_input)
+            if not torch.all(model_output['model_out'] == model_output_after_encoding['model_out']):
+                ValueError("Model output has changed after permutation")
+    else:
+        for i, secret_data in enumerate(secret_data_list):
+            data_path = secret_data["path"]
+            data_type = secret_data["type"]
+            if data_type == 'image':
+                data_name = "image_" + os.path.splitext(data_path.split('/')[-1])[0]
+            elif data_type == 'audio':
+                data_name = "audio_" + os.path.splitext(data_path.split('/')[-1])[0]
+            elif data_type == 'video':
+                data_name = "video_" + os.path.splitext(data_path.split('/')[-1])[0]
+            elif data_type == 'sdf':
+                data_name = "sdf_" + os.path.splitext(data_path.split('/')[-1])[0]
+            checkpoint = torch.load(f'{log_dir}/{data_name}.pth')
+            secret_inr = secret_inrs[i]
+            changed = 0
+            for name, param in checkpoint.items():
+                layer_index = int(name.split('.')[2])
+                if 'weight' in name:
+                    if not torch.all(param == secret_inr.net.net[layer_index][0].weight.data):
+                        changed += 1
+                elif 'bias' in name:
+                    if not torch.all(param == secret_inr.net.net[layer_index][0].bias.data):
+                        changed += 1
+            if changed > 0:
+                raise ValueError(f"Data {data_name} has changed")
 
 def reconstruct(secret_inrs, secret_data_list, config):
     for i, secret_data in enumerate(secret_data_list):

@@ -20,3 +20,4 @@ docker exec -u 0 $CONTAINER_NAME pip install torchmetrics
 docker exec -u 0 $CONTAINER_NAME pip install einops
 docker exec -u 0 $CONTAINER_NAME python3 -m pip install --no-cache-dir configargparse
 docker exec -u 0 $CONTAINER_NAME pip install --upgrade numpy==1.23
+docker exec -u 0 $CONTAINER_NAME pip install plyfile
