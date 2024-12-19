@@ -22,9 +22,8 @@ python main.py
 
 ## Update Plan
 - [X] Hide and reveal secret data
-- [ ] Evaluation on reconstructed results
-- [ ] Steganalysis analysis
-- [ ] Permutation application
+- [X] Evaluation on reconstructed results
+- [X] Permutation application
 
 ## SIREN
 We're using the excellent [siren](https://github.com/vsitzmann/siren/tree/master?tab=readme-ov-file) as baseline.
